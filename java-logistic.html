@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="id">
+<!--
+=====================================================================
+  JAVA LOGISTIC – Company Profile (UI SAJA, JavaScript = latihanmu)
+=====================================================================
+  CARA PREVIEW DARK MODE (tanpa JS):
+  tambahkan class="dark" di tag <html> ini → <html lang="id" class="dark">
+
+  ---------------------------------------------------------------
+  TODO LIST JAVASCRIPT
+  ---------------------------------------------------------------
+  [ ] 1. DARK MODE
+        - Klik #theme-toggle → toggle class "dark" di document.documentElement
+        - Simpan pilihan ke localStorage ("theme": "dark" / "light")
+        - Saat halaman dibuka: baca localStorage, kalau kosong ikuti
+          window.matchMedia('(prefers-color-scheme: dark)')
+
+  [ ] 2. MENU MOBILE
+        - Klik #btn-menu → toggle class "hidden" di #mobile-menu
+        - Tutup menu saat salah satu link di dalamnya diklik
+
+  [ ] 3. CAROUSEL (#carousel-track)
+        - #carousel-prev / #carousel-next → scrollBy({left: ±lebarSlide, behavior:'smooth'})
+        - Event "scroll" pada track → hitung slide aktif (scrollLeft / lebarSlide)
+        - Update dot di #carousel-dots:
+            aktif      → "h-2 w-8 bg-violet-500"
+            tidak aktif→ "h-2 w-2 bg-slate-300 dark:bg-white/25"
+        - Klik dot (atribut data-dot) → scroll ke slide tersebut
+        - Opsional: autoplay setInterval 5 detik, berhenti saat mouseenter
+
+  [ ] 4. FILTER KARIER (#job-filter, #job-list)
+        - Klik tombol [data-filter] → tampilkan <li> yang data-category cocok
+          (sembunyikan sisanya dengan class "hidden"); "semua" = tampilkan semua
+        - Pindahkan style tombol aktif:
+            aktif      → "bg-ink text-white dark:bg-white dark:text-ink"
+            tidak aktif→ "bg-white/70 dark:bg-white/5 ..." (lihat HTML)
+        - Kalau tidak ada hasil → tampilkan #job-empty
+        - Update jumlah posisi di #job-count
+
+  [ ] 5. PENCARIAN LOWONGAN (opsional)
+        - Ketik di #job-search → filter berdasarkan judul (case-insensitive)
+        - Gabungkan dengan filter kategori
+
+  [ ] 6. MODAL LAMAR (#apply-modal)
+        - Klik .job-apply → hapus "hidden" di modal, isi #apply-title
+          dengan nama posisi (ambil dari atribut data-job-title)
+        - Tutup: klik #apply-close, klik area gelap (#apply-modal), tekan Esc
+        - Kunci scroll body saat modal terbuka (overflow-hidden di <body>)
+
+  [ ] 7. VALIDASI FORM (#apply-form)
+        - Saat submit: preventDefault, cek nama tidak kosong, email valid
+          (regex), file CV harus .pdf dan maksimal 2 MB
+        - Error → hapus "hidden" di <p data-error-for="nama|email|cv">
+        - Hapus error saat input diperbaiki
+
+  [ ] 8. KIRIM LAMARAN
+        - Kumpulkan data dengan FormData, kirim pakai fetch() (POST) ke
+          backend / layanan form (Formspree, Google Apps Script, dll.)
+        - Tampilkan #apply-success saat berhasil, reset form, lalu tutup modal
+
+  [ ] 9. DATA LOWONGAN DINAMIS (opsional)
+        - Pindahkan daftar lowongan ke array/JSON atau API
+        - Render <li> ke #job-list lewat JS (template string)
+
+  [ ] 10. ANGKA STATISTIK ANIMASI (#stats [data-count])
+        - Saat section terlihat (IntersectionObserver), hitung naik dari 0
+          sampai nilai data-count
+
+  [ ] 11. NAVBAR AKTIF
+        - IntersectionObserver pada setiap <section id="...">, beri highlight
+          link navbar yang sesuai
+
+  [ ] 12. FINISHING
+        - Ganti logo mitra (SVG placeholder) dengan logo asli; Set 1 dan Set 2
+          di marquee HARUS identik agar loop mulus
+        - Ganti teks, angka, alamat, dan warna di tailwind.config
+        - Tes di layar HP, tablet, desktop, dan di dua mode (terang/gelap)
+=====================================================================
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Java Logistic – Pengiriman Antarpulau</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: { ink: '#14123A', night: '#0E0C24', haze: '#F5F3FF' },
+        fontFamily: {
+          head: ['"Bricolage Grotesque"', 'system-ui', 'sans-serif'],
+          body: ['"DM Sans"', 'system-ui', 'sans-serif']
+        },
+        keyframes: {
+          'marquee-ltr': { '0%': { transform: 'translateX(-50%)' }, '100%': { transform: 'translateX(0)' } },
+          'float': { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } }
+        },
+        animation: { 'marquee-ltr': 'marquee-ltr 28s linear infinite', 'float': 'float 6s ease-in-out infinite' }
+      }
+    }
+  }
+</script>
+<style>
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+  .marquee:hover .marquee-track { animation-play-state: paused; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track, .animate-float { animation: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body class="font-body bg-haze text-ink antialiased dark:bg-night dark:text-white transition-colors">
+
+<!-- ============ NAVBAR (pill melayang) ============ -->
+<header class="sticky top-3 z-40 px-3">
+  <nav class="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between rounded-full bg-white/75 dark:bg-white/10 backdrop-blur-xl border border-ink/10 dark:border-white/10 shadow-lg shadow-violet-500/5">
+    <a href="#beranda" class="flex items-center gap-2 font-head font-extrabold text-lg">
+      <span class="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white grid place-items-center text-xs">JL</span>
+      Java Logistic
+    </a>
+    <ul class="hidden md:flex items-center gap-1 text-sm font-medium">
+      <li><a class="px-3 py-2 rounded-full hover:bg-ink/5 dark:hover:bg-white/10" href="#tentang">Tentang</a></li>
+      <li><a class="px-3 py-2 rounded-full hover:bg-ink/5 dark:hover:bg-white/10" href="#layanan">Layanan</a></li>
+      <li><a class="px-3 py-2 rounded-full hover:bg-ink/5 dark:hover:bg-white/10" href="#sorotan">Sorotan</a></li>
+      <li><a class="px-3 py-2 rounded-full hover:bg-ink/5 dark:hover:bg-white/10" href="#mitra">Mitra</a></li>
+      <li><a class="px-3 py-2 rounded-full hover:bg-ink/5 dark:hover:bg-white/10" href="#karier">Karier</a></li>
+    </ul>
+    <div class="flex items-center gap-2">
+      <!-- Toggle dark mode: ikon berganti otomatis lewat class dark -->
+      <button id="theme-toggle" class="w-9 h-9 rounded-full grid place-items-center hover:bg-ink/5 dark:hover:bg-white/10" aria-label="Ganti tema">
+        <svg class="w-5 h-5 dark:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a href="#karier" class="hidden sm:inline-block px-4 py-2 rounded-full bg-ink text-white dark:bg-white dark:text-ink text-sm font-bold">Gabung tim</a>
+      <button id="btn-menu" class="md:hidden w-9 h-9 grid place-items-center" aria-label="Buka menu">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </nav>
+  <div id="mobile-menu" class="hidden md:hidden max-w-5xl mx-auto mt-2 rounded-3xl bg-white/90 dark:bg-night/95 backdrop-blur-xl border border-ink/10 dark:border-white/10 p-4">
+    <ul class="space-y-1 text-sm font-medium">
+      <li><a class="block px-3 py-2 rounded-xl hover:bg-ink/5 dark:hover:bg-white/10" href="#tentang">Tentang</a></li>
+      <li><a class="block px-3 py-2 rounded-xl hover:bg-ink/5 dark:hover:bg-white/10" href="#layanan">Layanan</a></li>
+      <li><a class="block px-3 py-2 rounded-xl hover:bg-ink/5 dark:hover:bg-white/10" href="#sorotan">Sorotan</a></li>
+      <li><a class="block px-3 py-2 rounded-xl hover:bg-ink/5 dark:hover:bg-white/10" href="#mitra">Mitra</a></li>
+      <li><a class="block px-3 py-2 rounded-xl hover:bg-ink/5 dark:hover:bg-white/10" href="#karier">Karier</a></li>
+    </ul>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section id="beranda" class="relative overflow-hidden -mt-14 pt-32 pb-20 md:pt-40 md:pb-28">
+  <!-- blob gradien -->
+  <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-violet-400/40 dark:bg-violet-600/30 blur-3xl"></div>
+  <div class="absolute top-20 -right-24 w-96 h-96 rounded-full bg-amber-300/50 dark:bg-fuchsia-600/25 blur-3xl"></div>
+
+  <div class="relative max-w-5xl mx-auto px-5 text-center">
+    <p class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/70 dark:bg-white/10 border border-ink/10 dark:border-white/10 text-sm font-medium">
+      <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Melayani 34 provinsi, setiap hari
+    </p>
+    <h1 class="mt-6 font-head font-extrabold text-5xl sm:text-6xl md:text-8xl leading-[0.95] tracking-tight">
+      Kirim ke ujung negeri,<br>
+      <span class="bg-gradient-to-r from-violet-500 via-fuchsia-500 to-amber-400 bg-clip-text text-transparent">tanpa drama.</span>
+    </h1>
+    <p class="mt-6 mx-auto max-w-xl text-lg text-ink/70 dark:text-white/70">Kargo laut, darat, dan udara dengan harga tertulis jelas dan pelacakan yang bisa kamu cek kapan saja.</p>
+    <div class="mt-9 flex flex-wrap justify-center gap-3">
+      <a href="#karier" class="px-7 py-3.5 rounded-full bg-ink text-white dark:bg-white dark:text-ink font-bold shadow-xl shadow-violet-500/20">Lihat lowongan</a>
+      <a href="#layanan" class="px-7 py-3.5 rounded-full bg-white/70 dark:bg-white/10 border border-ink/10 dark:border-white/15 font-bold">Pelajari layanan</a>
+    </div>
+  </div>
+
+  <!-- kartu kaca melayang (dekoratif, hanya desktop) -->
+  <div class="hidden lg:block absolute left-10 top-56 animate-float">
+    <div class="rounded-2xl bg-white/70 dark:bg-white/10 backdrop-blur-xl border border-white/40 dark:border-white/10 p-4 shadow-xl -rotate-6">
+      <p class="text-xs text-ink/60 dark:text-white/60">Status kargo</p>
+      <p class="font-head font-bold text-lg">Tiba di Makassar</p>
+    </div>
+  </div>
+  <div class="hidden lg:block absolute right-10 top-72 animate-float [animation-delay:2s]">
+    <div class="rounded-2xl bg-white/70 dark:bg-white/10 backdrop-blur-xl border border-white/40 dark:border-white/10 p-4 shadow-xl rotate-6">
+      <p class="text-xs text-ink/60 dark:text-white/60">Tepat waktu</p>
+      <p class="font-head font-bold text-lg">98,4%</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TENTANG: bento ============ -->
+<section id="tentang" class="py-16 md:py-24">
+  <div class="max-w-5xl mx-auto px-5">
+    <h2 class="font-head font-extrabold text-4xl md:text-5xl tracking-tight max-w-lg">Dari satu truk di Semarang, jadi jaringan nasional.</h2>
+    <div id="stats" class="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="col-span-2 rounded-3xl p-7 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+        <p class="text-sm text-white/80">Sejak</p>
+        <p class="font-head font-extrabold text-6xl mt-2" data-count="2009">2009</p>
+        <p class="mt-4 text-sm text-white/85 max-w-xs">Berawal dari melayani pedagang pasar, kini mengantar untuk produsen dan toko daring.</p>
+      </div>
+      <div class="rounded-3xl p-6 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10">
+        <p class="font-head font-extrabold text-4xl" data-count="860">860</p>
+        <p class="mt-1 text-sm text-ink/60 dark:text-white/60">Karyawan</p>
+      </div>
+      <div class="rounded-3xl p-6 bg-amber-300 text-ink">
+        <p class="font-head font-extrabold text-4xl" data-count="34">34</p>
+        <p class="mt-1 text-sm text-ink/70">Provinsi</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LAYANAN ============ -->
+<section id="layanan" class="py-16 md:py-24">
+  <div class="max-w-5xl mx-auto px-5">
+    <h2 class="font-head font-extrabold text-4xl md:text-5xl tracking-tight">Layanan</h2>
+    <div class="mt-10 grid md:grid-cols-3 gap-4">
+      <article class="rounded-3xl p-7 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 hover:-translate-y-1 transition">
+        <div class="w-12 h-12 rounded-2xl bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-300 grid place-items-center">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 17l2 3h14l2-3M5 17V9l7-4 7 4v8M12 5v12"/></svg>
+        </div>
+        <h3 class="mt-5 font-head font-bold text-xl">Kargo laut</h3>
+        <p class="mt-2 text-ink/70 dark:text-white/65 leading-relaxed">Kontainer 20 dan 40 kaki untuk muatan besar antarpulau, jadwal mingguan tetap.</p>
+      </article>
+      <article class="rounded-3xl p-7 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 hover:-translate-y-1 transition">
+        <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-400/20 text-amber-600 dark:text-amber-300 grid place-items-center">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z"/></svg>
+        </div>
+        <h3 class="mt-5 font-head font-bold text-xl">Pengiriman darat</h3>
+        <p class="mt-2 text-ink/70 dark:text-white/65 leading-relaxed">Truk boks dan tronton dari gudang ke pintu pelanggan, bisa pilih jam tiba.</p>
+      </article>
+      <article class="rounded-3xl p-7 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 hover:-translate-y-1 transition">
+        <div class="w-12 h-12 rounded-2xl bg-fuchsia-100 dark:bg-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-300 grid place-items-center">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v10H3zM9 20v-6h6v6"/></svg>
+        </div>
+        <h3 class="mt-5 font-head font-bold text-xl">Gudang &amp; fulfillment</h3>
+        <p class="mt-2 text-ink/70 dark:text-white/65 leading-relaxed">Simpan, kemas, dan kirim pesanan toko daring dari satu tempat.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SOROTAN: CAROUSEL ============ -->
+<section id="sorotan" class="py-16 md:py-24">
+  <div class="max-w-5xl mx-auto px-5 flex items-end justify-between gap-4">
+    <h2 class="font-head font-extrabold text-4xl md:text-5xl tracking-tight">Sorotan</h2>
+    <div class="flex gap-2">
+      <button id="carousel-prev" class="w-11 h-11 rounded-full border border-ink/15 dark:border-white/20 grid place-items-center hover:bg-ink hover:text-white dark:hover:bg-white dark:hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" aria-label="Slide sebelumnya">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <button id="carousel-next" class="w-11 h-11 rounded-full border border-ink/15 dark:border-white/20 grid place-items-center hover:bg-ink hover:text-white dark:hover:bg-white dark:hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" aria-label="Slide berikutnya">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- track: slide berukuran 85% agar slide berikutnya mengintip -->
+  <div id="carousel-track" class="mt-8 flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar px-5 md:px-[max(1.25rem,calc((100vw-64rem)/2+1.25rem))] scroll-px-5">
+    <figure data-slide="0" class="snap-start shrink-0 w-[85%] md:w-[620px] aspect-[16/10] rounded-3xl relative overflow-hidden bg-gradient-to-br from-violet-600 to-indigo-900">
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <path d="M0 180 Q50 160 100 180 T200 180 T300 180 T400 180 V250 H0Z" fill="#fff" opacity=".12"/>
+        <path d="M0 210 Q50 190 100 210 T200 210 T300 210 T400 210 V250 H0Z" fill="#fff" opacity=".18"/>
+        <rect x="120" y="120" width="150" height="34" rx="4" fill="#FFB020"/><rect x="150" y="98" width="36" height="22" fill="#fff"/><rect x="194" y="98" width="36" height="22" fill="#14123A"/>
+      </svg>
+      <figcaption class="absolute inset-x-0 bottom-0 p-6 text-white bg-gradient-to-t from-black/60 to-transparent">
+        <p class="font-head font-bold text-2xl">Armada 48 kapal</p>
+        <p class="text-sm text-white/80">Rute reguler Jakarta – Makassar – Jayapura.</p>
+      </figcaption>
+    </figure>
+    <figure data-slide="1" class="snap-start shrink-0 w-[85%] md:w-[620px] aspect-[16/10] rounded-3xl relative overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500">
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect x="50" y="110" width="70" height="110" fill="#14123A" opacity=".85"/><rect x="130" y="80" width="70" height="140" fill="#fff" opacity=".9"/><rect x="210" y="130" width="70" height="90" fill="#6C4DFF"/><rect x="290" y="100" width="60" height="120" fill="#14123A" opacity=".6"/>
+      </svg>
+      <figcaption class="absolute inset-x-0 bottom-0 p-6 text-white bg-gradient-to-t from-black/60 to-transparent">
+        <p class="font-head font-bold text-2xl">12 gudang terhubung</p>
+        <p class="text-sm text-white/85">Stok dan pengiriman tercatat dalam satu sistem.</p>
+      </figcaption>
+    </figure>
+    <figure data-slide="2" class="snap-start shrink-0 w-[85%] md:w-[620px] aspect-[16/10] rounded-3xl relative overflow-hidden bg-gradient-to-br from-fuchsia-500 to-violet-700">
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <path d="M40 180 L170 100 L360 160" stroke="#fff" stroke-width="5" fill="none" stroke-dasharray="3 12" stroke-linecap="round"/>
+        <circle cx="40" cy="180" r="10" fill="#FFB020"/><circle cx="360" cy="160" r="10" fill="#fff"/><circle cx="170" cy="100" r="7" fill="#fff" opacity=".7"/>
+      </svg>
+      <figcaption class="absolute inset-x-0 bottom-0 p-6 text-white bg-gradient-to-t from-black/60 to-transparent">
+        <p class="font-head font-bold text-2xl">Pelacakan langsung</p>
+        <p class="text-sm text-white/80">Lihat posisi kargo kapan saja dari ponsel.</p>
+      </figcaption>
+    </figure>
+    <figure data-slide="3" class="snap-start shrink-0 w-[85%] md:w-[620px] aspect-[16/10] rounded-3xl relative overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-700">
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <circle cx="300" cy="80" r="46" fill="#fff" opacity=".25"/><circle cx="110" cy="150" r="70" fill="#fff" opacity=".15"/><path d="M60 190h280" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <figcaption class="absolute inset-x-0 bottom-0 p-6 text-white bg-gradient-to-t from-black/60 to-transparent">
+        <p class="font-head font-bold text-2xl">Armada ramah lingkungan</p>
+        <p class="text-sm text-white/85">Truk baru memakai bahan bakar lebih irit.</p>
+      </figcaption>
+    </figure>
+  </div>
+
+  <div id="carousel-dots" class="max-w-5xl mx-auto px-5 mt-6 flex gap-2">
+    <button data-dot="0" class="h-2 w-8 rounded-full bg-violet-500" aria-label="Slide 1"></button>
+    <button data-dot="1" class="h-2 w-2 rounded-full bg-slate-300 dark:bg-white/25" aria-label="Slide 2"></button>
+    <button data-dot="2" class="h-2 w-2 rounded-full bg-slate-300 dark:bg-white/25" aria-label="Slide 3"></button>
+    <button data-dot="3" class="h-2 w-2 rounded-full bg-slate-300 dark:bg-white/25" aria-label="Slide 4"></button>
+  </div>
+</section>
+
+<!-- ============ MITRA: logo berjalan kiri → kanan ============ -->
+<section id="mitra" class="py-16 md:py-24">
+  <div class="max-w-5xl mx-auto px-5">
+    <h2 class="font-head font-extrabold text-4xl md:text-5xl tracking-tight">Dipercaya mitra kami</h2>
+  </div>
+  <div class="marquee mt-10 relative overflow-hidden py-8 bg-ink dark:bg-white/5 text-white" aria-label="Logo mitra perusahaan">
+    <div class="pointer-events-none absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-ink dark:from-night to-transparent z-10"></div>
+    <div class="pointer-events-none absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-ink dark:from-night to-transparent z-10"></div>
+
+    <div class="marquee-track flex w-max animate-marquee-ltr">
+      <!-- Set 1 -->
+      <div class="flex items-center gap-16 pr-16">
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#fff"/><path d="M12 22l8-10 8 10z" fill="#6C4DFF"/></svg><span class="font-head font-bold text-xl">Bumi Retail</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="10" fill="#FFB020"/><rect x="12" y="12" width="16" height="16" rx="3" fill="#14123A"/></svg><span class="font-head font-bold text-xl">Kopi Lintas</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><path d="M20 2l16 9v18l-16 9-16-9V11z" fill="#d946ef"/><circle cx="20" cy="20" r="6" fill="#fff"/></svg><span class="font-head font-bold text-xl">Agro Sentosa</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><circle cx="14" cy="20" r="12" fill="#fff"/><circle cx="26" cy="20" r="12" fill="#6C4DFF" opacity=".85"/></svg><span class="font-head font-bold text-xl">Dua Samudra</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><path d="M4 34L20 6l16 28z" fill="#fff"/><path d="M14 34l6-11 6 11z" fill="#FFB020"/></svg><span class="font-head font-bold text-xl">Gunung Mas</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><rect x="3" y="14" width="34" height="12" rx="6" fill="#34d399"/><circle cx="20" cy="20" r="5" fill="#14123A"/></svg><span class="font-head font-bold text-xl">Pasar Digital</span></div>
+      </div>
+      <!-- Set 2 (duplikat persis Set 1) -->
+      <div class="flex items-center gap-16 pr-16" aria-hidden="true">
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#fff"/><path d="M12 22l8-10 8 10z" fill="#6C4DFF"/></svg><span class="font-head font-bold text-xl">Bumi Retail</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="10" fill="#FFB020"/><rect x="12" y="12" width="16" height="16" rx="3" fill="#14123A"/></svg><span class="font-head font-bold text-xl">Kopi Lintas</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><path d="M20 2l16 9v18l-16 9-16-9V11z" fill="#d946ef"/><circle cx="20" cy="20" r="6" fill="#fff"/></svg><span class="font-head font-bold text-xl">Agro Sentosa</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><circle cx="14" cy="20" r="12" fill="#fff"/><circle cx="26" cy="20" r="12" fill="#6C4DFF" opacity=".85"/></svg><span class="font-head font-bold text-xl">Dua Samudra</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><path d="M4 34L20 6l16 28z" fill="#fff"/><path d="M14 34l6-11 6 11z" fill="#FFB020"/></svg><span class="font-head font-bold text-xl">Gunung Mas</span></div>
+        <div class="flex items-center gap-3 shrink-0 opacity-75 hover:opacity-100"><svg class="w-10 h-10" viewBox="0 0 40 40"><rect x="3" y="14" width="34" height="12" rx="6" fill="#34d399"/><circle cx="20" cy="20" r="5" fill="#14123A"/></svg><span class="font-head font-bold text-xl">Pasar Digital</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ KARIER ============ -->
+<section id="karier" class="py-16 md:py-24">
+  <div class="max-w-5xl mx-auto px-5">
+    <div class="md:flex md:items-end md:justify-between gap-6">
+      <div>
+        <h2 class="font-head font-extrabold text-4xl md:text-5xl tracking-tight">Karier</h2>
+        <p class="mt-3 text-ink/70 dark:text-white/65 max-w-md"><span id="job-count">4</span> posisi terbuka. Ayo gabung dan gerakkan barang antarpulau bersama kami.</p>
+      </div>
+      <input id="job-search" type="search" placeholder="Cari posisi" aria-label="Cari posisi"
+        class="mt-6 md:mt-0 w-full md:w-64 rounded-full bg-white dark:bg-white/5 border border-ink/10 dark:border-white/15 px-5 py-3 text-sm placeholder:text-ink/40 dark:placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-violet-500">
+    </div>
+
+    <div id="job-filter" class="mt-6 flex flex-wrap gap-2">
+      <button data-filter="semua" class="px-4 py-2 rounded-full text-sm font-bold bg-ink text-white dark:bg-white dark:text-ink">Semua</button>
+      <button data-filter="operasional" class="px-4 py-2 rounded-full text-sm font-medium bg-white/70 dark:bg-white/5 border border-ink/10 dark:border-white/15 hover:border-violet-500">Operasional</button>
+      <button data-filter="teknologi" class="px-4 py-2 rounded-full text-sm font-medium bg-white/70 dark:bg-white/5 border border-ink/10 dark:border-white/15 hover:border-violet-500">Teknologi</button>
+      <button data-filter="bisnis" class="px-4 py-2 rounded-full text-sm font-medium bg-white/70 dark:bg-white/5 border border-ink/10 dark:border-white/15 hover:border-violet-500">Bisnis</button>
+    </div>
+
+    <ul id="job-list" class="mt-8 space-y-3">
+      <li data-category="operasional" class="rounded-3xl p-6 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 flex flex-col sm:flex-row sm:items-center gap-4 hover:border-violet-500 transition">
+        <div class="flex-1">
+          <h3 class="font-head font-bold text-xl">Koordinator Gudang</h3>
+          <p class="mt-2 flex flex-wrap gap-2 text-xs font-medium">
+            <span class="px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">Surabaya</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Penuh waktu</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Operasional</span>
+          </p>
+        </div>
+        <button data-job-title="Koordinator Gudang" class="job-apply px-6 py-3 rounded-full bg-ink text-white dark:bg-white dark:text-ink text-sm font-bold hover:bg-violet-600 dark:hover:bg-violet-300">Lamar</button>
+      </li>
+      <li data-category="teknologi" class="rounded-3xl p-6 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 flex flex-col sm:flex-row sm:items-center gap-4 hover:border-violet-500 transition">
+        <div class="flex-1">
+          <h3 class="font-head font-bold text-xl">Frontend Developer</h3>
+          <p class="mt-2 flex flex-wrap gap-2 text-xs font-medium">
+            <span class="px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">Jakarta</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Hibrida</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Teknologi</span>
+          </p>
+        </div>
+        <button data-job-title="Frontend Developer" class="job-apply px-6 py-3 rounded-full bg-ink text-white dark:bg-white dark:text-ink text-sm font-bold hover:bg-violet-600 dark:hover:bg-violet-300">Lamar</button>
+      </li>
+      <li data-category="bisnis" class="rounded-3xl p-6 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 flex flex-col sm:flex-row sm:items-center gap-4 hover:border-violet-500 transition">
+        <div class="flex-1">
+          <h3 class="font-head font-bold text-xl">Account Executive</h3>
+          <p class="mt-2 flex flex-wrap gap-2 text-xs font-medium">
+            <span class="px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">Makassar</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Penuh waktu</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Bisnis</span>
+          </p>
+        </div>
+        <button data-job-title="Account Executive" class="job-apply px-6 py-3 rounded-full bg-ink text-white dark:bg-white dark:text-ink text-sm font-bold hover:bg-violet-600 dark:hover:bg-violet-300">Lamar</button>
+      </li>
+      <li data-category="operasional" class="rounded-3xl p-6 bg-white dark:bg-white/5 border border-ink/10 dark:border-white/10 flex flex-col sm:flex-row sm:items-center gap-4 hover:border-violet-500 transition">
+        <div class="flex-1">
+          <h3 class="font-head font-bold text-xl">Pengemudi Tronton</h3>
+          <p class="mt-2 flex flex-wrap gap-2 text-xs font-medium">
+            <span class="px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">Semarang</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Kontrak</span>
+            <span class="px-3 py-1 rounded-full bg-ink/5 dark:bg-white/10">Operasional</span>
+          </p>
+        </div>
+        <button data-job-title="Pengemudi Tronton" class="job-apply px-6 py-3 rounded-full bg-ink text-white dark:bg-white dark:text-ink text-sm font-bold hover:bg-violet-600 dark:hover:bg-violet-300">Lamar</button>
+      </li>
+    </ul>
+    <p id="job-empty" class="hidden mt-8 text-center text-ink/60 dark:text-white/60">Belum ada posisi yang cocok. Coba kategori atau kata kunci lain.</p>
+  </div>
+</section>
+
+<!-- ============ MODAL LAMAR ============ -->
+<div id="apply-modal" class="hidden fixed inset-0 z-50 bg-ink/70 backdrop-blur-sm grid place-items-center p-5" role="dialog" aria-modal="true" aria-labelledby="apply-title">
+  <div class="w-full max-w-md rounded-3xl bg-white dark:bg-night border border-transparent dark:border-white/10 p-7">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-sm text-ink/60 dark:text-white/60">Melamar sebagai</p>
+        <h3 id="apply-title" class="font-head font-extrabold text-2xl">Nama posisi</h3>
+      </div>
+      <button id="apply-close" class="w-9 h-9 -mr-2 rounded-full grid place-items-center hover:bg-ink/5 dark:hover:bg-white/10" aria-label="Tutup">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <form id="apply-form" class="mt-6 space-y-4" novalidate>
+      <div>
+        <label for="a-nama" class="block text-sm font-medium mb-1.5">Nama lengkap</label>
+        <input id="a-nama" name="nama" type="text" class="w-full rounded-xl bg-haze dark:bg-white/5 border border-ink/10 dark:border-white/15 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-violet-500">
+        <p data-error-for="nama" class="hidden mt-1 text-sm text-rose-500">Nama wajib diisi.</p>
+      </div>
+      <div>
+        <label for="a-email" class="block text-sm font-medium mb-1.5">Email</label>
+        <input id="a-email" name="email" type="email" class="w-full rounded-xl bg-haze dark:bg-white/5 border border-ink/10 dark:border-white/15 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-violet-500">
+        <p data-error-for="email" class="hidden mt-1 text-sm text-rose-500">Masukkan email yang valid.</p>
+      </div>
+      <div>
+        <label for="a-cv" class="block text-sm font-medium mb-1.5">CV (PDF, maks. 2 MB)</label>
+        <input id="a-cv" name="cv" type="file" accept=".pdf" class="w-full text-sm file:mr-3 file:rounded-full file:border-0 file:bg-violet-100 file:text-violet-700 dark:file:bg-violet-500/20 dark:file:text-violet-200 file:px-4 file:py-2.5 file:font-medium">
+        <p data-error-for="cv" class="hidden mt-1 text-sm text-rose-500">Unggah CV berformat PDF, maksimal 2 MB.</p>
+      </div>
+      <button type="submit" class="w-full py-3.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold hover:brightness-110">Kirim lamaran</button>
+      <p id="apply-success" class="hidden text-center text-sm text-emerald-500 font-medium">Lamaran terkirim. Kami akan menghubungimu lewat email.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer id="kontak" class="bg-ink dark:bg-black/30 text-white">
+  <div class="max-w-5xl mx-auto px-5 py-16">
+    <p class="font-head font-extrabold text-4xl md:text-6xl tracking-tight max-w-xl">Punya kargo yang perlu sampai?</p>
+    <a href="mailto:halo@javalogistic.example" class="inline-block mt-8 px-7 py-3.5 rounded-full bg-amber-300 text-ink font-bold">halo@javalogistic.example</a>
+    <div class="mt-14 grid sm:grid-cols-3 gap-8 text-sm text-white/70">
+      <div><p class="text-white font-bold mb-2">Java Logistic</p><p>Jl. Pelabuhan Raya No. 18, Surabaya 60165</p></div>
+      <div><p class="text-white font-bold mb-2">Kontak</p><p>(031) 555-0123</p><p>Senin–Jumat, 08.00–17.00 WIB</p></div>
+      <ul class="space-y-1"><li class="text-white font-bold mb-2">Menu</li><li><a class="hover:text-amber-300" href="#layanan">Layanan</a></li><li><a class="hover:text-amber-300" href="#mitra">Mitra</a></li><li><a class="hover:text-amber-300" href="#karier">Karier</a></li></ul>
+    </div>
+  </div>
+  <div class="border-t border-white/10 text-center text-xs text-white/50 py-5">© 2026 PT Java Logistic</div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
